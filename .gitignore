@@ -1,0 +1,11 @@
+*.txt
+# Output files
+digest.txt
+*.digest
+
+# Test outputs
+test-*
+
+# OS specific
+.DS_Store
+Thumbs.db
