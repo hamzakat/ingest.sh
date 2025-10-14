@@ -17,15 +17,6 @@ There are some great tools out there that solve similar problems:
 
 While these tools are excellent, they require installing packages which isn't straightforward in air-gapped work environments! So, I just wanted something more portable that doesn't require installing packages or dependencies. Just a simple shell script that works anywhere you have a terminal (bash or PowerShell).
 
-## Features
-
-- **Zero dependencies**: Just a shell script that works out of the box
-- **Cross-platform**: Available for both Unix/Linux (bash) and Windows (PowerShell)
-- **Smart filtering**: Automatically excludes binary files, large files, and common non-source directories
-- **Configurable options**: Include/exclude patterns, maximum file size, debug output
-- **Jupyter notebook support**: Converts .ipynb files to readable markdown format (`jq` or `jupyter nbconvert` are required, otherwise you will get raw ouptputs)
-- **Encoding handling**: Properly handles files with different character encodings
-- **Output flexibility**: Can output to file or stdout for piping to other tools
 
 ## Quick Start
 
@@ -91,6 +82,16 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 | `-s, --max-size SIZE` | Maximum file size (default: 1MB, can use K/M/G suffixes) |
 | `-d, --debug` | Enable debug output |
 | `-h, --help` | Show help message |
+
+## Features
+
+- **Zero dependencies**: Just a shell script that works out of the box
+- **Cross-platform**: Available for both Unix/Linux (bash) and Windows (PowerShell)
+- **Smart filtering**: Automatically excludes binary files, large files, and common non-source directories
+- **Configurable options**: Include/exclude patterns, maximum file size, debug output
+- **Jupyter notebook support**: Converts .ipynb files to readable markdown format (`jq` or `jupyter nbconvert` are required, otherwise you will get raw ouptputs)
+- **Encoding handling**: Properly handles files with different character encodings
+- **Output flexibility**: Can output to file or stdout for piping to other tools
 
 ## File Filtering
 
