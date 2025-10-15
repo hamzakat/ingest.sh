@@ -17,29 +17,24 @@ There are some great tools out there that solve similar problems:
 
 While these tools are excellent, they require installing packages which isn't straightforward in air-gapped work environments! So, I just wanted something more portable that doesn't require installing packages or dependencies. Just a simple shell script that works anywhere you have a terminal (bash or PowerShell).
 
-## Features
-
-- **Zero dependencies**: Just a shell script that works out of the box
-- **Cross-platform**: Available for both Unix/Linux (bash) and Windows (PowerShell)
-- **Smart filtering**: Automatically excludes binary files, large files, and common non-source directories
-- **Configurable options**: Include/exclude patterns, maximum file size, debug output
-- **Jupyter notebook support**: Converts .ipynb files to readable markdown format (`jq` or `jupyter nbconvert` are required, otherwise you will get raw ouptputs)
-- **Encoding handling**: Properly handles files with different character encodings
-- **Output flexibility**: Can output to file or stdout for piping to other tools
- - **.gitignore-aware**: Honors `.gitignore` by default with a flag to disable
 
 ## Quick Start
 
 ### Unix/Linux/macOS
 
 ```bash
-# Download and run on current directory
-curl -sSL https://raw.githubusercontent.com/hamzakat/ingest.sh/main/ingest.sh | bash -s . -o -
-
-# Download and save for later use
+# Download the script and save for later use
 curl -sSL https://raw.githubusercontent.com/hamzakat/ingest.sh/main/ingest.sh -o ingest.sh
 chmod +x ingest.sh
 ./ingest.sh /path/to/project
+
+# Download and run directly on current directory
+curl -sSL https://raw.githubusercontent.com/hamzakat/ingest.sh/main/ingest.sh | bash -s .
+# You'll find the output in digest.txt
+
+# Download and run on current directory and pipe the result
+curl -sSL https://raw.githubusercontent.com/hamzakat/ingest.sh/main/ingest.sh | bash -s . -o - | ...
+
 ```
 
 ### Windows PowerShell
@@ -70,7 +65,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ```bash
 # Pipe to Claude Code
-./ingest.sh -o - | claude --p "Analyze this codebase"
+./ingest.sh -o - | claude -p "Analyze this codebase"
 
 # Pipe to llm tool (by https://github.com/simonw/llm)
 ./ingest.sh -o - | llm -s "Summarize this codebase"
@@ -88,6 +83,16 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 | `--no-gitignore` | Disable reading patterns from `.gitignore` (enabled by default) |
 | `-d, --debug` | Enable debug output |
 | `-h, --help` | Show help message |
+
+## Features
+
+- **Zero dependencies**: Just a shell script that works out of the box
+- **Cross-platform**: Available for both Unix/Linux (bash) and Windows (PowerShell)
+- **Smart filtering**: Automatically excludes binary files, large files, and common non-source directories
+- **Configurable options**: Include/exclude patterns, maximum file size, debug output
+- **Jupyter notebook support**: Converts .ipynb files to readable markdown format (`jq` or `jupyter nbconvert` are required, otherwise you will get raw ouptputs)
+- **Encoding handling**: Properly handles files with different character encodings
+- **Output flexibility**: Can output to file or stdout for piping to other tools
 
 ## File Filtering
 
