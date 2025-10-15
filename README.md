@@ -26,6 +26,7 @@ While these tools are excellent, they require installing packages which isn't st
 - **Jupyter notebook support**: Converts .ipynb files to readable markdown format (`jq` or `jupyter nbconvert` are required, otherwise you will get raw ouptputs)
 - **Encoding handling**: Properly handles files with different character encodings
 - **Output flexibility**: Can output to file or stdout for piping to other tools
+ - **.gitignore-aware**: Honors `.gitignore` by default with a flag to disable
 
 ## Quick Start
 
@@ -84,6 +85,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 | `-i, --include PATTERN` | Include files matching pattern (can be used multiple times) |
 | `-e, --exclude PATTERN` | Exclude files matching pattern (can be used multiple times) |
 | `-s, --max-size SIZE` | Maximum file size (default: 1MB, can use K/M/G suffixes) |
+| `--no-gitignore` | Disable reading patterns from `.gitignore` (enabled by default) |
 | `-d, --debug` | Enable debug output |
 | `-h, --help` | Show help message |
 
@@ -97,6 +99,44 @@ The script automatically excludes:
 - Files with binary MIME types
 
 It always includes common source code file types (.py, .js, .ts, .java, etc.) and configuration files.
+
+By default, both scripts read and apply ignore rules from the `.gitignore` file in the specified source directory. You can turn this off with the `--no-gitignore` flag if you want to include files that would otherwise be ignored by Git.
+
+## Sample Output
+
+Below is a truncated example of the generated output to illustrate the structure.
+
+```text
+Summary:
+--------
+Total files: 123
+Total lines: 45678
+Max file size: 1048576 bytes
+
+Directory structure:
+my-project
+├── src
+│   ├── index.ts
+│   └── utils
+│       └── helpers.ts
+├── package.json
+└── README.md
+
+================================================
+FILE: src/index.ts
+================================================
+// ... file contents here ...
+
+================================================
+FILE: README.md
+================================================
+# Project Title
+// ... file contents here ...
+```
+
+Notes:
+- The output file itself (default `digest.txt` or a custom `-o/--output` path) is always excluded from the analysis.
+- `.gitignore` rules are applied by default; use `--no-gitignore` to disable that behavior.
 
 ## Contributing
 

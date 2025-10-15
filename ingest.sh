@@ -76,6 +76,7 @@ show_help() {
     echo "  -i, --include PATTERN Include files matching pattern (can be used multiple times)"
     echo "  -e, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
     echo "  -s, --max-size SIZE   Maximum file size in bytes (default: 1MB)"
+    echo "  --no-gitignore        Do not use patterns from .gitignore for exclusion" 
     echo "  -d, --debug           Enable debug output"
     echo "  -h, --help            Show this help message"
     echo ""
@@ -91,7 +92,10 @@ OUTPUT_FILE="digest.txt"
 SOURCE_DIR="."
 INCLUDE_PATTERNS=()
 EXCLUDE_PATTERNS=()
+USE_GITIGNORE=true
 DEBUG=false
+
+
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -124,6 +128,12 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+
+        --no-gitignore)
+            USE_GITIGNORE=false
+            shift
+            ;;
+
         -d|--debug)
             DEBUG=true
             shift
@@ -144,8 +154,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Debug function
+debug() {
+    if [[ "$DEBUG" == "true" ]]; then
+        echo "DEBUG: $1" >&2
+    fi
+}
+
+
 # Convert to absolute path
 SOURCE_DIR=$(realpath "$SOURCE_DIR")
+
+# Resolve output file absolute path (if not stdout)
+OUTPUT_ABS=""
+if [[ "$OUTPUT_FILE" != "-" ]]; then
+    OUTPUT_ABS=$(realpath -m "$OUTPUT_FILE" 2>/dev/null || echo "")
+fi
 
 # Check if source directory exists
 if [[ ! -d "$SOURCE_DIR" ]]; then
@@ -155,24 +179,26 @@ fi
 
 # Read .gitignore file and add to ignore patterns
 IGNORE_PATTERNS=("${DEFAULT_IGNORE_PATTERNS[@]}")
-if [[ -f "$SOURCE_DIR/.gitignore" ]]; then
-    while IFS= read -r line; do
-        # Skip empty lines and comments
-        if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
-            IGNORE_PATTERNS+=("$line")
-        fi
-    done < "$SOURCE_DIR/.gitignore"
+if [[ "$USE_GITIGNORE" == "true" ]]; then
+    if [[ -f "$SOURCE_DIR/.gitignore" ]]; then
+        debug "Using patterns from .gitignore"
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Strip trailing CR (for CRLF files) and trim leading/trailing whitespace
+            line="${line%$'\r'}"
+            line="$(printf '%s' "$line" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+            # Skip empty lines and comments
+            if [[ -n "$line" && ! "$line" =~ ^# ]]; then
+                IGNORE_PATTERNS+=("$line")
+            fi
+        done < "$SOURCE_DIR/.gitignore"
+    fi
+else
+    debug "Ignoring .gitignore file as requested"
 fi
 
 # Merge exclude patterns
 ALL_IGNORE_PATTERNS=("${IGNORE_PATTERNS[@]}" "${EXCLUDE_PATTERNS[@]}")
 
-# Debug function
-debug() {
-    if [[ "$DEBUG" == "true" ]]; then
-        echo "DEBUG: $1" >&2
-    fi
-}
 
 # Check if file extension is a text file
 is_text_extension() {
@@ -271,7 +297,10 @@ is_binary() {
     # Use file command to detect file type
     if command -v file >/dev/null 2>&1; then
         local file_type=$(file -b --mime-type "$file" 2>/dev/null)
-        if [[ "$file_type" == "application/octet-stream" || ("$file_type" == "application/*" && "$file_type" != "application/json" && "$file_type" != "application/xml" && "$file_type" != "application/x-yaml" && "$file_type" != "application/x-tex") || "$file_type" == "image/*" || "$file_type" == "video/*" || "$file_type" == "audio/*" ]]; then
+        # Treat most application/* (except common text-y ones) and any image/*, video/*, audio/* as binary
+        if [[ $file_type == "application/octet-stream" ]] || \
+           [[ $file_type == image/* ]] || [[ $file_type == video/* ]] || [[ $file_type == audio/* ]] || \
+           ( [[ $file_type == application/* ]] && [[ $file_type != application/json ]] && [[ $file_type != application/xml ]] && [[ $file_type != application/x-yaml ]] && [[ $file_type != application/x-tex ]] ); then
             debug "File $file is binary (mime type: $file_type)"
             return 0
         fi
@@ -291,22 +320,27 @@ matches_pattern() {
     local path="$1"
     shift
     local patterns=("$@")
-    
+
     for pattern in "${patterns[@]}"; do
         # Convert path to relative path
         local rel_path="${path#$SOURCE_DIR/}"
-        
+
+        # Normalize pattern: strip leading './' and leading '/'
+        local pat="$pattern"
+        [[ "$pat" == ./* ]] && pat="${pat#./}"
+        [[ "$pat" == /* ]] && pat="${pat#/}"
+
         # Handle directory patterns (ending with /)
-        if [[ "$pattern" == */ ]]; then
-            local dir_pattern="${pattern%/}"
+        if [[ "$pat" == */ ]]; then
+            local dir_pattern="${pat%/}"
             if [[ "$rel_path" == "$dir_pattern"/* || "$rel_path" == "$dir_pattern" ]]; then
                 debug "Path $rel_path matches directory pattern $pattern"
                 return 0
             fi
         fi
-        
+
         # Handle glob patterns
-        if [[ "$rel_path" == $pattern ]]; then
+        if [[ "$rel_path" == $pat ]]; then
             debug "Path $rel_path matches pattern $pattern"
             return 0
         fi
@@ -318,6 +352,22 @@ matches_pattern() {
 is_ignored() {
     local path="$1"
     
+    # Always ignore the output file itself (default or custom -o)
+    if [[ -n "$OUTPUT_ABS" ]]; then
+        # Compare absolute paths; entries discovered by find are absolute
+        if [[ "$path" == "$OUTPUT_ABS" ]]; then
+            debug "Path $path is the output file; excluding"
+            return 0
+        fi
+    fi
+
+    # If include patterns are specified and the path matches one, do NOT ignore it.
+    # This gives `-i` precedence over ignore rules.
+    if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]] && matches_pattern "$path" "${INCLUDE_PATTERNS[@]}"; then
+        debug "Path $path is explicitly included, overriding ignore rules."
+        return 1 # Not ignored (in Bash, 1 is a "false" exit code)
+    fi
+
     # Check if path contains .git directory
     if [[ "$path" == *".git"* ]]; then
         debug "Path $path contains .git directory"

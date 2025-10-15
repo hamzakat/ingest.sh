@@ -84,6 +84,7 @@ function Show-Help {
     Write-Host "  -i, --include PATTERN Include files matching pattern (can be used multiple times)"
     Write-Host "  -e, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
     Write-Host "  -s, --max-size SIZE   Maximum file size (default: 1MB)"
+    Write-Host "     --no-gitignore     Do not use patterns from .gitignore for exclusion"
     Write-Host "  -d, --debug           Enable debug output"
     Write-Host "  -h, --help            Show this help message"
     Write-Host ""
@@ -99,6 +100,7 @@ function Show-Help {
  $SOURCE_DIR = "."
  $INCLUDE_PATTERNS = @()
  $EXCLUDE_PATTERNS = @()
+$USE_GITIGNORE = $true
  $DEBUG = $false
 
 for ($i = 0; $i -lt $args.Count; $i++) {
@@ -152,6 +154,9 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 exit 1
             }
         }
+        { $_ -eq "--no-gitignore" } {
+            $USE_GITIGNORE = $false
+        }
         { $_ -eq "-d" -or $_ -eq "--debug" } {
             $DEBUG = $true
         }
@@ -179,16 +184,36 @@ if (-not $SOURCE_DIR) {
 }
  $SOURCE_DIR = $SOURCE_DIR.Path
 
+# Resolve output file absolute path (if not stdout)
+ $OUTPUT_ABS = $null
+if ($OUTPUT_FILE -ne "-") {
+    try {
+        $OUTPUT_ABS = (Resolve-Path -Path $OUTPUT_FILE -ErrorAction SilentlyContinue)
+        if ($OUTPUT_ABS) { $OUTPUT_ABS = $OUTPUT_ABS.Path } else {
+            # If path doesn't exist yet, combine with current location to get an absolute path
+            $OUTPUT_ABS = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $OUTPUT_FILE))
+        }
+    } catch {
+        $OUTPUT_ABS = $null
+    }
+}
+
 # Read .gitignore file and add to ignore patterns
  $IGNORE_PATTERNS = $DEFAULT_IGNORE_PATTERNS.Clone()
  $gitignorePath = Join-Path $SOURCE_DIR ".gitignore"
-if (Test-Path $gitignorePath) {
-    Get-Content $gitignorePath | ForEach-Object {
-        # Skip empty lines and comments
-        if ($_ -and $_.Trim() -and -not $_.Trim().StartsWith("#")) {
-            $IGNORE_PATTERNS += $_.Trim()
+if ($USE_GITIGNORE) {
+    $gitignorePath = Join-Path $SOURCE_DIR ".gitignore"
+    if (Test-Path $gitignorePath) {
+        Write-Host "Using patterns from .gitignore" # Optional: feedback for the user
+        Get-Content $gitignorePath | ForEach-Object {
+            # Skip empty lines and comments
+            if ($_ -and $_.Trim() -and -not $_.Trim().StartsWith("#")) {
+                $IGNORE_PATTERNS += $_.Trim()
+            }
         }
     }
+} else {
+    Write-Host "Ignoring .gitignore file as requested" # Optional: feedback for the user
 }
 
 # Merge exclude patterns
@@ -206,12 +231,13 @@ function Debug-Message {
 function Is-TextExtension {
     param([string]$File)
     
-    $extension = [System.IO.Path]::GetExtension($File).TrimStart('.')
+    $extension = [System.IO.Path]::GetExtension($File).TrimStart('.') 
+    if ($extension) { $extension = $extension.ToLower() }
     $filename = [System.IO.Path]::GetFileName($File).ToLower()
     
-    # Check against known text file extensions
+    # Make sure TEXT_FILE_EXTENSIONS are treated lowercase
     foreach ($ext in $TEXT_FILE_EXTENSIONS) {
-        if ($extension -eq $ext -or $filename -eq $ext) {
+        if ($extension -eq $ext.ToLower() -or $filename -eq $ext.ToLower()) {
             return $true
         }
     }
@@ -384,6 +410,17 @@ function Matches-Pattern {
 function Should-Ignore {
     param([string]$Path)
     
+    # Always ignore the output file itself (default or custom -o)
+    if ($OUTPUT_ABS -and ($Path -eq $OUTPUT_ABS)) {
+        Debug-Message "Path $Path is the output file; excluding"
+        return $true
+    }
+
+    if ($INCLUDE_PATTERNS.Count -gt 0 -and (Matches-Pattern $Path $INCLUDE_PATTERNS)) {
+        Debug-Message "Path $Path is explicitly included, overriding ignore rules."
+        return $false
+    }
+    
     # Check if path contains .git directory
     if ($Path -like "*\.git*") {
         Debug-Message "Path $Path contains .git directory"
@@ -418,34 +455,35 @@ function Should-Include {
 # Generate directory tree structure
 function Generate-Tree {
     param([string]$Dir, [string]$Prefix)
-    
+
     # Get entries in directory and sort them
-    $entries = Get-ChildItem $Dir -Force | Where-Object { 
-        -not (Should-Ignore $_.FullName) -and (Should-Include $_.FullName) 
+    $entries = Get-ChildItem $Dir -Force | Where-Object {
+        -not (Should-Ignore $_.FullName) -and (Should-Include $_.FullName)
     } | Sort-Object Name
-    
+
     $count = $entries.Count
     $i = 0
-    
+
     foreach ($entry in $entries) {
         $i++
         $name = $entry.Name
         $isLast = ($i -eq $count)
         $newPrefix = $Prefix
-        
+
         if ($isLast) {
-            Write-Host "$Prefix└── $name"
-            $newPrefix = "$Prefix    "
+            Add-Content -Path $TREE_FILE -Value ("{0}+-- {1}" -f $Prefix, $name)
+            $newPrefix = "$Prefix   "
         } else {
-            Write-Host "$Prefix├── $name"
-            $newPrefix = "$Prefix│   "
+            Add-Content -Path $TREE_FILE -Value ("{0}|-- {1}" -f $Prefix, $name)
+            $newPrefix = "$Prefix|  "
         }
-        
+
         if ($entry.PSIsContainer) {
             Generate-Tree $entry.FullName $newPrefix
         }
     }
 }
+
 
 # Create temporary files
  $TREE_FILE = [System.IO.Path]::GetTempFileName()
@@ -456,7 +494,7 @@ function Generate-Tree {
 # Generate directory tree
 "Directory structure:" | Out-File -FilePath $TREE_FILE -Encoding UTF8
 (Get-Item $SOURCE_DIR).Name | Out-File -FilePath $TREE_FILE -Encoding UTF8 -Append
-Generate-Tree $SOURCE_DIR "" | Out-File -FilePath $TREE_FILE -Encoding UTF8 -Append
+Generate-Tree $SOURCE_DIR ""
 
 # Initialize counters
 "0" | Out-File -FilePath $COUNT_FILE -Encoding UTF8
@@ -465,7 +503,7 @@ Generate-Tree $SOURCE_DIR "" | Out-File -FilePath $TREE_FILE -Encoding UTF8 -App
 # Process file contents
 "File processing log:" | Out-File -FilePath $DEBUG_FILE -Encoding UTF8
 
-Get-ChildItem -Path $SOURCE_DIR -Recurse -File | ForEach-Object {
+Get-ChildItem -Path $SOURCE_DIR -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
     $file = $_.FullName
     $relPath = $file.Replace($SOURCE_DIR, "").TrimStart("\", "/")
     
