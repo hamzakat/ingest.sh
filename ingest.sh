@@ -72,11 +72,12 @@ show_help() {
     echo "Usage: $0 [options] [source directory]"
     echo ""
     echo "Options:"
-    echo "  -o, --output FILE     Output file path (default: digest.txt, use '-' for stdout)"
+    echo "  -o, --output FILE     Output file path (default: digest_YYYYMMDD_HHMMSS.txt, use '-' for stdout)"
     echo "  -i, --include PATTERN Include files matching pattern (can be used multiple times)"
     echo "  -e, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
     echo "  -s, --max-size SIZE   Maximum file size in bytes (default: 1MB)"
     echo "  --no-gitignore        Do not use patterns from .gitignore for exclusion" 
+    echo "  --no-timestamp        Do not add timestamp to output filename"
     echo "  -d, --debug           Enable debug output"
     echo "  -h, --help            Show this help message"
     echo ""
@@ -93,7 +94,11 @@ SOURCE_DIR="."
 INCLUDE_PATTERNS=()
 EXCLUDE_PATTERNS=()
 USE_GITIGNORE=true
+USE_TIMESTAMP=true
 DEBUG=false
+
+# Generate timestamp in a consistent format
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
 
 
@@ -134,6 +139,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
 
+        --no-timestamp)
+            USE_TIMESTAMP=false
+            shift
+            ;;
+
         -d|--debug)
             DEBUG=true
             shift
@@ -168,6 +178,10 @@ SOURCE_DIR=$(realpath "$SOURCE_DIR")
 # Resolve output file absolute path (if not stdout)
 OUTPUT_ABS=""
 if [[ "$OUTPUT_FILE" != "-" ]]; then
+    # Add timestamp to filename if enabled and not explicitly set by user
+    if [[ "$USE_TIMESTAMP" == "true" ]] && [[ "$OUTPUT_FILE" == "digest.txt" ]]; then
+        OUTPUT_FILE="digest_${TIMESTAMP}.txt"
+    fi
     OUTPUT_ABS=$(realpath -m "$OUTPUT_FILE" 2>/dev/null || echo "")
 fi
 
@@ -507,7 +521,9 @@ FILE_COUNT=$(head -n 1 "$COUNT_FILE")
 LINE_COUNT=$(tail -n 1 "$COUNT_FILE")
 
 # Generate summary
-SUMMARY="Summary:
+SUMMARY="Generated: $(date '+%Y-%m-%d %H:%M:%S')
+
+Summary:
 --------
 Total files: $FILE_COUNT
 Total lines: $LINE_COUNT

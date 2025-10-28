@@ -80,11 +80,12 @@ function Show-Help {
     Write-Host "Usage: .\ingest.ps1 [options] [source directory]"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  -o, --output FILE     Output file path (default: digest.txt, use '-' for stdout)"
+    Write-Host "  -o, --output FILE     Output file path (default: digest_YYYYMMDD_HHMMSS.txt, use '-' for stdout)"
     Write-Host "  -i, --include PATTERN Include files matching pattern (can be used multiple times)"
     Write-Host "  -e, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
     Write-Host "  -s, --max-size SIZE   Maximum file size (default: 1MB)"
     Write-Host "     --no-gitignore     Do not use patterns from .gitignore for exclusion"
+    Write-Host "     --no-timestamp     Do not add timestamp to output filename"
     Write-Host "  -d, --debug           Enable debug output"
     Write-Host "  -h, --help            Show this help message"
     Write-Host ""
@@ -101,7 +102,11 @@ function Show-Help {
  $INCLUDE_PATTERNS = @()
  $EXCLUDE_PATTERNS = @()
 $USE_GITIGNORE = $true
+$USE_TIMESTAMP = $true
  $DEBUG = $false
+
+# Generate timestamp in a consistent format
+$TIMESTAMP = Get-Date -Format "yyyyMMdd_HHmmss"
 
 for ($i = 0; $i -lt $args.Count; $i++) {
     switch ($args[$i]) {
@@ -187,6 +192,10 @@ if (-not $SOURCE_DIR) {
 # Resolve output file absolute path (if not stdout)
  $OUTPUT_ABS = $null
 if ($OUTPUT_FILE -ne "-") {
+    # Add timestamp to filename if enabled and not explicitly set by user
+    if ($USE_TIMESTAMP -and $OUTPUT_FILE -eq "digest.txt") {
+        $OUTPUT_FILE = "digest_${TIMESTAMP}.txt"
+    }
     try {
         $OUTPUT_ABS = (Resolve-Path -Path $OUTPUT_FILE -ErrorAction SilentlyContinue)
         if ($OUTPUT_ABS) { $OUTPUT_ABS = $OUTPUT_ABS.Path } else {
@@ -594,6 +603,8 @@ FILE: $relPath
 
 # Generate summary
  $SUMMARY = @"
+Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+
 Summary:
 --------
 Total files: $FILE_COUNT

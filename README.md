@@ -76,11 +76,12 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 | Option | Description |
 |--------|-------------|
-| `-o, --output FILE` | Output file path (default: digest.txt, use '-' for stdout) |
+| `-o, --output FILE` | Output file path (default: digest_YYYYMMDD_HHMMSS.txt, use '-' for stdout) |
 | `-i, --include PATTERN` | Include files matching pattern (can be used multiple times) |
 | `-e, --exclude PATTERN` | Exclude files matching pattern (can be used multiple times) |
 | `-s, --max-size SIZE` | Maximum file size (default: 1MB, can use K/M/G suffixes) |
 | `--no-gitignore` | Disable reading patterns from `.gitignore` (enabled by default) |
+| `--no-timestamp` | Disable adding timestamp to output filename (enabled by default) |
 | `-d, --debug` | Enable debug output |
 | `-h, --help` | Show help message |
 
